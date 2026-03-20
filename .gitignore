@@ -1,0 +1,28 @@
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Maven wrapper (optional — remove if you commit it)
+.mvn/wrapper/maven-wrapper.jar
