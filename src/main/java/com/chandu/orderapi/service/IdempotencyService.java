@@ -8,9 +8,8 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 
 /**
- * Guarantees exactly-once processing of Kafka events.
- * Stores processed event IDs in Redis with a 24-hour TTL.
- * On consumer restart or rebalance, duplicate events are safely skipped.
+ * Provides a bounded idempotency window for Kafka event processing.
+ * Redis SET NX atomically lets one consumer claim an event ID for 24 hours.
  */
 @Slf4j
 @Service
@@ -23,33 +22,22 @@ public class IdempotencyService {
     private final RedisTemplate<String, String> redisTemplate;
 
     /**
-     * Returns true if this event has already been processed (duplicate).
+     * Returns true only when this caller acquires the event claim.
      */
-    public boolean isDuplicate(String eventId) {
-        String key = IDEMPOTENCY_KEY_PREFIX + eventId;
-        Boolean exists = redisTemplate.hasKey(key);
-        return Boolean.TRUE.equals(exists);
-    }
-
-    /**
-     * Marks an event as processed. Returns false if a race condition
-     * caused another thread to mark it first (atomic set-if-absent).
-     */
-    public boolean markProcessed(String eventId) {
+    public boolean tryClaim(String eventId) {
         String key = IDEMPOTENCY_KEY_PREFIX + eventId;
         Boolean set = redisTemplate.opsForValue().setIfAbsent(key, "1", EVENT_TTL);
         if (Boolean.FALSE.equals(set)) {
-            log.warn("Idempotency conflict: eventId={} was already marked processed by another thread", eventId);
+            log.warn("Idempotency conflict: eventId={} is already claimed", eventId);
             return false;
         }
-        log.debug("Marked event as processed: eventId={}", eventId);
-        return true;
+        return Boolean.TRUE.equals(set);
     }
 
     /**
      * Removes idempotency key — used when processing fails and we want to allow retry.
      */
-    public void clearProcessed(String eventId) {
+    public void releaseClaim(String eventId) {
         String key = IDEMPOTENCY_KEY_PREFIX + eventId;
         redisTemplate.delete(key);
         log.debug("Cleared idempotency key for retry: eventId={}", eventId);

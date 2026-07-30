@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Custom Micrometer metrics exposed via /actuator/prometheus.
- * Feeds into CloudWatch dashboards for SLO alerting.
+ * Exported through the Prometheus actuator endpoint for dashboards and alerts.
  */
 @Component
 public class OrderMetrics {

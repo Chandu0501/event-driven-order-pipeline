@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Spring-managed collaborators are intentionally retained by constructor injection. -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+        <Or>
+            <Class name="com.chandu.orderapi.producer.OrderEventProducer"/>
+            <Class name="com.chandu.orderapi.service.IdempotencyService"/>
+        </Or>
+    </Match>
+</FindBugsFilter>

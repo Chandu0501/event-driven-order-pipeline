@@ -57,13 +57,12 @@ class OrderEventConsumerTest {
     @Test
     @DisplayName("should process ORDER_CREATED event and ACK")
     void consume_orderCreated_triggersPaymentValidation() {
-        when(idempotencyService.isDuplicate("evt-001")).thenReturn(false);
-        when(idempotencyService.markProcessed("evt-001")).thenReturn(true);
+        when(idempotencyService.tryClaim("evt-001")).thenReturn(true);
 
         consumer.consumeOrderEvent(record(testEvent), acknowledgment);
 
         verify(orderService).validatePayment("order-001");
-        verify(idempotencyService).markProcessed("evt-001");
+        verify(idempotencyService).tryClaim("evt-001");
         verify(acknowledgment).acknowledge();
         verify(orderMetrics).incrementEventProcessed("ORDER_CREATED");
     }
@@ -71,7 +70,7 @@ class OrderEventConsumerTest {
     @Test
     @DisplayName("should skip duplicate event and ACK without processing")
     void consume_duplicateEvent_skipsAndAcks() {
-        when(idempotencyService.isDuplicate("evt-001")).thenReturn(true);
+        when(idempotencyService.tryClaim("evt-001")).thenReturn(false);
 
         consumer.consumeOrderEvent(record(testEvent), acknowledgment);
 
@@ -83,13 +82,14 @@ class OrderEventConsumerTest {
     @Test
     @DisplayName("should NOT ACK on processing failure (triggers retry)")
     void consume_processingException_doesNotAck() {
-        when(idempotencyService.isDuplicate("evt-001")).thenReturn(false);
+        when(idempotencyService.tryClaim("evt-001")).thenReturn(true);
         doThrow(new RuntimeException("DB timeout")).when(orderService).validatePayment("order-001");
 
         org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
                 () -> consumer.consumeOrderEvent(record(testEvent), acknowledgment));
 
         verify(acknowledgment, never()).acknowledge();
+        verify(idempotencyService).releaseClaim("evt-001");
         verify(orderMetrics).incrementProcessingError();
     }
 
@@ -98,8 +98,7 @@ class OrderEventConsumerTest {
     void consume_paymentValidated_triggersInventoryReservation() {
         testEvent.setEventType("PAYMENT_VALIDATED");
         testEvent.setStatus(OrderStatus.PAYMENT_VALIDATED);
-        when(idempotencyService.isDuplicate("evt-001")).thenReturn(false);
-        when(idempotencyService.markProcessed("evt-001")).thenReturn(true);
+        when(idempotencyService.tryClaim("evt-001")).thenReturn(true);
 
         consumer.consumeOrderEvent(record(testEvent), acknowledgment);
 
@@ -112,8 +111,7 @@ class OrderEventConsumerTest {
     void consume_inventoryReserved_triggersShipment() {
         testEvent.setEventType("INVENTORY_RESERVED");
         testEvent.setStatus(OrderStatus.INVENTORY_RESERVED);
-        when(idempotencyService.isDuplicate("evt-001")).thenReturn(false);
-        when(idempotencyService.markProcessed("evt-001")).thenReturn(true);
+        when(idempotencyService.tryClaim("evt-001")).thenReturn(true);
 
         consumer.consumeOrderEvent(record(testEvent), acknowledgment);
 

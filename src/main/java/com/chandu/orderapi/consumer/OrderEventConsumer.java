@@ -38,7 +38,7 @@ public class OrderEventConsumer {
                 record.partition(), record.offset());
 
         // Idempotency guard — skip already-processed events
-        if (idempotencyService.isDuplicate(event.getEventId())) {
+        if (!idempotencyService.tryClaim(event.getEventId())) {
             log.warn("Duplicate event skipped: eventId={} orderId={}", event.getEventId(), event.getOrderId());
             orderMetrics.incrementDuplicateSkipped();
             ack.acknowledge();
@@ -47,7 +47,6 @@ public class OrderEventConsumer {
 
         try {
             processEvent(event);
-            idempotencyService.markProcessed(event.getEventId());
             orderMetrics.incrementEventProcessed(event.getEventType());
             ack.acknowledge();
 
@@ -57,6 +56,7 @@ public class OrderEventConsumer {
             log.error("Failed to process event: eventId={} type={} error={}",
                     event.getEventId(), event.getEventType(), ex.getMessage(), ex);
             orderMetrics.incrementProcessingError();
+            idempotencyService.releaseClaim(event.getEventId());
             // Do NOT ack — let the DefaultErrorHandler retry and eventually DLQ
             throw ex;
         }

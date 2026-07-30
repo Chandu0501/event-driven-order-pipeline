@@ -31,8 +31,8 @@ public class OrderService {
 
     /**
      * Creates a new order and publishes ORDER_CREATED event to Kafka.
-     * Transactional: DB write + Kafka publish are coordinated — on failure,
-     * the DB record is rolled back and no event is emitted.
+     * The database write is transactional. Kafka publication is a separate
+     * operation; see docs/design-tradeoffs.md for the dual-write limitation.
      */
     @Transactional
     public Order createOrder(Order order) {

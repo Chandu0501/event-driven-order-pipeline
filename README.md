@@ -6,7 +6,9 @@
 [![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-7.6-black?logo=apachekafka)](https://kafka.apache.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> Kafka-powered microservice pipeline processing **500K+ daily events** with circuit-breaker patterns, idempotency guarantees, and Prometheus/CloudWatch observability. Achieves **3× throughput improvement** (500 → 1,500 req/s) through producer batching, manual consumer ACK, and partitioned event routing.
+> A runnable reference implementation of a resilient order workflow using Kafka, PostgreSQL, Redis, and Spring Boot. It focuses on failure handling, per-order event ordering, bounded idempotency, and observable state transitions.
+
+> **Scope:** This is a portfolio system, not a production deployment. Performance numbers are intentionally not claimed without a reproducible run. A k6 workload is included under `benchmarks/` so results can be generated and reviewed on the reader's own hardware.
 
 ---
 
@@ -76,7 +78,7 @@
       │        │   ┌───────────────┐      ┌──────────────────────┐   │
       │        │   │  Redis Cache  │      │  Micrometer/Prometheus│   │
       │        │   │  (Idempotency │      │  /actuator/prometheus │   │
-      │        │   │   key store)  │      │  → CloudWatch         │   │
+      │        │   │   key store)  │      │  Prometheus scrape    │   │
       │        │   └───────────────┘      └──────────────────────┘   │
       │        └──────────────────────────────────────────────────────┘
 ```
@@ -99,13 +101,16 @@
 
 ## Key Engineering Decisions
 
+The precise delivery guarantees and the PostgreSQL/Kafka dual-write limitation
+are documented in [`docs/design-tradeoffs.md`](docs/design-tradeoffs.md).
+
 | Concern | Solution | Why |
 |---|---|---|
 | **Duplicate events** | Redis `SET NX` idempotency keys (24h TTL) | Kafka at-least-once delivery can replay — guard all consumers |
 | **Partition ordering** | Producer key = `orderId` | All events for one order land on same partition → sequential processing |
 | **Cascading failures** | Resilience4j circuit breaker (50% threshold, 30s open) | Prevent payment service downtime from taking down the pipeline |
-| **Throughput** | 32KB batch, 5ms linger, snappy compression | 3× req/s improvement without topology changes |
-| **Observability** | Micrometer counters per event type + Prometheus scrape | Feeds CloudWatch SLO alerts; MTTR < 2 min |
+| **Throughput** | 32KB batch, 5ms linger, snappy compression | Tunable settings whose impact can be measured with the included k6 workload |
+| **Observability** | Micrometer counters per event type + Prometheus scrape | Makes workflow failures and duplicate suppression visible |
 | **Consumer safety** | Manual ACK, DLQ after 3 retries | No silent message loss on pod restart or rebalance |
 
 ---
@@ -120,9 +125,9 @@
 | Database | PostgreSQL 16 + Flyway migrations |
 | Cache | Redis 7.2 (idempotency store) |
 | Circuit Breaker | Resilience4j 2.2 |
-| Observability | Micrometer + Prometheus + CloudWatch |
-| Testing | JUnit 5, Mockito, Testcontainers |
-| Coverage | JaCoCo (75% minimum enforced) |
+| Observability | Micrometer + Prometheus |
+| Testing | JUnit 5 and Mockito (Testcontainers dependencies reserved for future integration tests) |
+| Coverage | JaCoCo (40% whole-project minimum enforced; raise as tests expand) |
 | Container | Docker + docker-compose |
 | CI/CD | GitHub Actions |
 
@@ -146,7 +151,7 @@ Wait for all services to be healthy (check with `docker-compose ps`).
 ### 2. Run the application
 
 ```bash
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 Or with Docker:
@@ -205,11 +210,14 @@ GET /api/v1/orders/customer/{customerId}
 # Unit tests only
 mvn test
 
-# Unit + coverage check (75% threshold enforced)
-mvn verify -Ptest
+# Unit tests + whole-project coverage check (40% threshold enforced)
+mvn verify
 
-# Integration tests (requires Docker for Testcontainers)
-mvn verify -Pintegration-test
+# Static analysis
+mvn spotbugs:check
+
+# Reproducible API workload (requires k6 and a running stack)
+k6 run benchmarks/create-orders.js
 ```
 
 ---
@@ -247,7 +255,7 @@ src/
 ├── main/resources/
 │   ├── db/migration/    # Flyway SQL migrations
 │   └── application.yml  # Config for local + docker profiles
-└── test/java/...        # Unit tests (JUnit 5 + Mockito, 75%+ coverage)
+└── test/java/...        # Unit tests (JUnit 5 + Mockito)
 ```
 
 ---
