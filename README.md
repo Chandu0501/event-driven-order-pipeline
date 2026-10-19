@@ -263,4 +263,4 @@ src/
 ## Author
 
 **Sai Chandu Vallaboju** — Senior Software Engineer  
-[GitHub](https://github.com/Chandu0501) · [LinkedIn](https://www.linkedin.com/in/saichandu-vallaboju) · [chanduvallaboju01@gmail.com](mailto:chanduvallaboju01@gmail.com)
+[GitHub](https://github.com/Chandu0501) · [LinkedIn](https://www.linkedin.com/in/saichandu-vallaboju) · [saichanduvallaboju@gmail.com](mailto:saichanduvallaboju@gmail.com)
